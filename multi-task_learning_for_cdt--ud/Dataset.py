@@ -2,6 +2,8 @@ from __future__ import division
 import os
 import sys
 import codecs
+from copy import deepcopy
+
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -12,7 +14,7 @@ class ConlluPOSDataset(Dataset):
 	def __init__(self, data, root_dir):
 		super(ConlluPOSDataset, self).__init__()
 		self.root_dir = root_dir
-		self.data = data
+		self.data = deepcopy(data)
 		self.data_size = len(self.data)
 
 		self.padding()
@@ -36,6 +38,39 @@ class ConlluPOSDataset(Dataset):
 				self.data[id]["pos_tags"].extend([100] * (max_len - self.data[id]["length"]))
 				self.data[id]["pos_tags"] = torch.LongTensor(self.data[id]["pos_tags"])
 			# self.data[id]["pos_tags"].dtype = "int64"
+
+class Embedding():
+	def __init__(self, embedding_dim):
+		self.embeddings = {}
+		self.embedding_dim = embedding_dim
+
+	def load_embedding(self, embedding_file):
+		with codecs.open(embedding_file, "r", encoding="utf-8") as fi:
+			lines = fi.read().strip().split("\n")
+			for line in lines:
+				line = line.strip()
+				if line:
+					tokens = line.split(" ")
+					if len(tokens) != 2 and tokens[0] != u'</s>':
+						embedding = [float(str_float) for str_float in tokens[-self.embedding_dim:]]
+						word = " ".join(tokens[:-self.embedding_dim])
+
+						if word in self.embeddings:
+							print ("{} is already in the embedding file.".format(word.encode("utf-8")))
+						else:
+							self.embeddings[word] = embedding
+
+	def extract_embedding(self, embedding_file, index2word):
+		# return: FloatTensor
+		self.load_embedding(embedding_file)
+		embeds = []
+		for key, value in index2word.iteritems():
+			if key != 0 and value in self.embeddings:
+				embeds.append(self.embeddings[value])
+			else:
+				embeds.append([0] * self.embedding_dim)
+		return torch.FloatTensor(embeds)
+
 
 class Map():
 	"""Map words and tags to id."""
@@ -120,34 +155,45 @@ if __name__ == "__main__":
 	# assert len(sys.argv) == 2, "Usage: python Dataset.py conllu_file"
 	# ud_dataset = ConlluPOSDataset("/users3/dcteng/work/cdt-ud/data/ud-traditional/UD_Chinese/zh-ud-dev.conllu", \
 	#	"/users3/dcteng/work/cdt-ud/data/ud-traditional/UD_Chinese/")
-	mapping = Map()
-	data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/ud-traditional/UD_Chinese/zh-ud-train.conllu")
+	ud_mapping = Map()
+	ud_train_data = ud_mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/zhs-ud-train.conllu")
+	ud_dev_data = ud_mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/zhs-ud-dev.conllu")
+
+	cdt_mapping = ud_mapping
+	cdt_train_data = cdt_mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-train.conll", UD_Data=False)
+	cdt_dev_data = cdt_mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-holdout.conll", UD_Data=False)
+	cdt_test_data = cdt_mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-test.conll", UD_Data=False)
+
 	print "Number of Sentences:\t{}\nNumber of Words:\t{}\nNumber of CDT_Tags:\t{}\nNumber of UD_Tags:\t{}\n"\
-		.format(len(data), mapping.num_words, mapping.num_cdt_pos_tags, mapping.num_ud_pos_tags)
-	print "UD_Tags:\n{}\n".format(mapping.ud_pos_tag2index)
-	UD_Dataset = ConlluPOSDataset(data, "/users3/dcteng/work/cdt-ud/data/ud-traditional/UD_Chinese/")
-	UD_Dataloader = DataLoader(UD_Dataset, batch_size=4, shuffle=True)
+		.format(len(ud_train_data) + len(ud_dev_data), ud_mapping.num_words, ud_mapping.num_cdt_pos_tags, ud_mapping.num_ud_pos_tags)
 
-	for i_batch, sample_batched in enumerate(UD_Dataloader):
-		# mini_batch = torch.cat(sample_batched['sentence'], dim=0)
-		# mini_batch = torch.zeros(len(sample_batched["sentence"]),4)
-		# [mini_batch[i].add_(sample_batched["sentence"][i]) for i in range(len(sample_batched["sentence"]))]
-		# mini_batch = torch.stack(sample_batched["sentence"])
-		# print i_batch, mini_batch.size()
-		# print sample_batched["pos_tags"].size()
-		# print sample_batched["length"].size()
-		# print len(sample_batched['sentence']), type(sample_batched['sentence']), type(sample_batched['sentence'][0]), sample_batched['sentence'][0].size()
-		# print len(sample_batched['pos_tags']), type(sample_batched['pos_tags']), type(sample_batched['pos_tags'][0]), sample_batched['pos_tags'][0].size()
-		# print type(sample_batched['length']), sample_batched['length'].size()
+	print "Number of Sentences:\t{}\nNumber of Words:\t{}\nNumber of CDT_Tags:\t{}\nNumber of UD_Tags:\t{}\n"\
+		.format(len(cdt_train_data) + len(cdt_dev_data) + len(cdt_test_data), cdt_mapping.num_words, cdt_mapping.num_cdt_pos_tags, cdt_mapping.num_ud_pos_tags)
+	
+	# print "UD_Tags:\n{}\n".format(mapping.ud_pos_tag2index)
+	# UD_Dataset = ConlluPOSDataset(data, "/users3/dcteng/work/cdt-ud/data/ud-traditional/UD_Chinese/")
+	# UD_Dataloader = DataLoader(UD_Dataset, batch_size=4, shuffle=True)
 
-		if i_batch == 3:
-			# print mini_batch
-			for i in range(sample_batched["length"][0]):
-				print mapping.index2word[sample_batched["sentence"][0][i]],
-			print
-			for i in range(sample_batched["length"][0]):
-				print mapping.index2ud_pos_tag[sample_batched["pos_tags"][0][i]],
-			# print sample_batched['sentence'][sample_batched['length'][0]-1]
-			# print sample_batched['pos_tags'][sample_batched['length'][0]]
-			# print sample_batched['length']
-			break
+	# for i_batch, sample_batched in enumerate(UD_Dataloader):
+	# 	# mini_batch = torch.cat(sample_batched['sentence'], dim=0)
+	# 	# mini_batch = torch.zeros(len(sample_batched["sentence"]),4)
+	# 	# [mini_batch[i].add_(sample_batched["sentence"][i]) for i in range(len(sample_batched["sentence"]))]
+	# 	# mini_batch = torch.stack(sample_batched["sentence"])
+	# 	# print i_batch, mini_batch.size()
+	# 	# print sample_batched["pos_tags"].size()
+	# 	# print sample_batched["length"].size()
+	# 	# print len(sample_batched['sentence']), type(sample_batched['sentence']), type(sample_batched['sentence'][0]), sample_batched['sentence'][0].size()
+	# 	# print len(sample_batched['pos_tags']), type(sample_batched['pos_tags']), type(sample_batched['pos_tags'][0]), sample_batched['pos_tags'][0].size()
+	# 	# print type(sample_batched['length']), sample_batched['length'].size()
+
+	# 	if i_batch == 3:
+	# 		# print mini_batch
+	# 		for i in range(sample_batched["length"][0]):
+	# 			print mapping.index2word[sample_batched["sentence"][0][i]],
+	# 		print
+	# 		for i in range(sample_batched["length"][0]):
+	# 			print mapping.index2ud_pos_tag[sample_batched["pos_tags"][0][i]],
+	# 		# print sample_batched['sentence'][sample_batched['length'][0]-1]
+	# 		# print sample_batched['pos_tags'][sample_batched['length'][0]]
+	# 		# print sample_batched['length']
+	# 		break

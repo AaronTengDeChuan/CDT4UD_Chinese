@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 
-from Dataset import ConlluPOSDataset, Map
+from Dataset import ConlluPOSDataset, Map, Embedding
 from torch.utils.data import Dataset, DataLoader
 
 from Bi_LSTM_Model import MultiTaskBiLSTM
@@ -116,11 +116,15 @@ def joint_train(DataLoader_iters, r):
 
 		optimizer.step()
 
+		# print (lstm_model.w1_embeddings(inputs).data[:1])
+		# exit(0)
+
 		if n_iter % print_every == 0:
 			print "%s (iters: %d %d%%) %.4f" % (timeSince(start), n_iter, (n_iter % n_iters) / n_iters * 100, loss.data[0])
 
 		if n_iter % n_iters == 0:
 			result, cdt2ud_accuracy = evaluate(CDT2UD_Gold_Dataloader, True)
+			# result, cdt2ud_accuracy = evaluate(CDT2UD_Test_Dataloader, True)
 
 			if cdt2ud_accuracy > best_cdt2ud_accuracy:
 				best_cdt2ud_accuracy = cdt2ud_accuracy
@@ -219,7 +223,7 @@ def pre_train(DataLoaders):
 		start = time.time()
 
 		preface = "UD Training Start..." if UD else "CDT Training Start..." 
-		print preface
+		print (preface)
 
 		for epoch in range(1, epochs + 1):
 			n_iters = Train_Dataset.data_size // batch_size
@@ -235,7 +239,8 @@ def pre_train(DataLoaders):
 					print "%s (iters: %d %d%%) %.4f" % (timeSince(start), i_batch + 1, (i_batch + 1) / n_iters * 100, loss)
 				# exit(0)
 
-			result, cdt2ud_accuracy = evaluate(CDT2UD_Gold_Dataloader, True)
+			# result, cdt2ud_accuracy = evaluate(CDT2UD_Gold_Dataloader, True)
+			result, cdt2ud_accuracy = evaluate(CDT2UD_Test_Dataloader, True)
 			_, dev_accuracy = evaluate(Dev_Dataloader, UD)
 			_, train_accuracy = evaluate(Train_Dataloader, UD)
 
@@ -279,7 +284,8 @@ def pre_train(DataLoaders):
 # parameters
 epochs = 20
 batch_size = 10
-input_size = 300
+pretrained_embedding_size = 50
+random_embedding_size = 50
 hidden_size = 300
 output_size_cdt = 29
 output_size_ud = 17
@@ -291,40 +297,61 @@ learning_rate = 0.005
 ######################################################################
 # ud training data
 mapping = Map()
-ud_train_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/ud-simplified/zhs-ud-train.conllu")
-UD_Train_Dataset = ConlluPOSDataset(ud_train_data, "/users3/dcteng/work/cdt-ud/data/ud-simplified/")
+ud_train_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/zhs-ud-train.conllu")
+UD_Train_Dataset = ConlluPOSDataset(ud_train_data, "/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/")
 UD_Train_Dataloader = DataLoader(UD_Train_Dataset, batch_size=batch_size, shuffle=True)
 
 # ud dev data
-ud_dev_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/ud-simplified/zhs-ud-dev.conllu")
-UD_Dev_Dataset = ConlluPOSDataset(ud_dev_data, "/users3/dcteng/work/cdt-ud/data/ud-simplified/")
+ud_dev_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/zhs-ud-dev.conllu")
+UD_Dev_Dataset = ConlluPOSDataset(ud_dev_data, "/users3/dcteng/work/CDT4UD_Chinese/data/ud-simplified/")
 UD_Dev_Dataloader = DataLoader(UD_Dev_Dataset, batch_size=batch_size)
 
 
 # CDT Data
 ######################################################################
 # cdt training data
-cdt_train_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/cdt/dep/cdt-train.conll", UD_Data=False)
-CDT_Train_Dataset = ConlluPOSDataset(cdt_train_data, "/users3/dcteng/work/cdt-ud/data/cdt/dep/")
+cdt_train_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-train.conll", UD_Data=False)
+CDT_Train_Dataset = ConlluPOSDataset(cdt_train_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/")
 CDT_Train_Dataloader = DataLoader(CDT_Train_Dataset, batch_size=batch_size, shuffle=True)
 
 # cdt dev data
-cdt_dev_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/cdt/dep/cdt-holdout.conll", UD_Data=False)
-CDT_Dev_Dataset = ConlluPOSDataset(cdt_dev_data, "/users3/dcteng/work/cdt-ud/data/cdt/dep/")
+cdt_dev_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-holdout.conll", UD_Data=False)
+CDT_Dev_Dataset = ConlluPOSDataset(cdt_dev_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/")
 CDT_Dev_Dataloader = DataLoader(CDT_Dev_Dataset, batch_size=batch_size)
 
 # cdt test data
-cdt_test_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/cdt/dep/cdt-test.conll", UD_Data=False)
-CDT_Test_Dataset = ConlluPOSDataset(cdt_test_data, "/users3/dcteng/work/cdt-ud/data/cdt/dep/")
+cdt_test_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/cdt-test.conll", UD_Data=False)
+CDT_Test_Dataset = ConlluPOSDataset(cdt_test_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt/dep/")
 CDT_Test_Dataloader = DataLoader(CDT_Test_Dataset, batch_size=batch_size)
 
 # cdt2ud Data
 ######################################################################
 # cdt2ud gold data
-cdt2ud_gold_data = mapping.read_from_conllu_file("/users3/dcteng/work/cdt-ud/data/cdt2ud/gold/CDT.sample250.bigram_adapted.conll.TengDeChuan.trees.conll10", UD_Data=True)
-CDT2UD_Gold_Dataset = ConlluPOSDataset(cdt2ud_gold_data, "/users3/dcteng/work/cdt-ud/data/cdt/dep/")
-CDT2UD_Gold_Dataloader = DataLoader(CDT2UD_Gold_Dataset , batch_size=batch_size)
+cdt2ud_gold_data = mapping.read_from_conllu_file("/users3/dcteng/work/CDT4UD_Chinese/data/cdt2ud/gold/CDT.sample250.bigram_adapted.conll.TengDeChuan.trees.conll10", UD_Data=True)
+# divide gold data into train data and test data
+# train data:	50%
+# test data:	50%
+cdt2ud_train_data = cdt2ud_gold_data[:len(cdt2ud_gold_data) // 2]
+cdt2ud_test_data = cdt2ud_gold_data[len(cdt2ud_gold_data) // 2:]
 
+CDT2UD_Gold_Dataset = ConlluPOSDataset(cdt2ud_gold_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt2ud/gold/")
+CDT2UD_Gold_Dataloader = DataLoader(CDT2UD_Gold_Dataset , batch_size=batch_size)
+CDT2UD_Train_Dataset = ConlluPOSDataset(cdt2ud_train_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt2ud/gold/")
+CDT2UD_Train_Dataloader = DataLoader(CDT2UD_Train_Dataset , batch_size=batch_size)
+CDT2UD_Test_Dataset = ConlluPOSDataset(cdt2ud_test_data, "/users3/dcteng/work/CDT4UD_Chinese/data/cdt2ud/gold/")
+CDT2UD_Test_Dataloader = DataLoader(CDT2UD_Test_Dataset , batch_size=batch_size)
+
+# Embeddings
+######################################################################
+# pretrained embedding file
+embedding_file = "/data/ltp/ltp-data/dep/giga-50.bin"
+# load embedding
+embed = Embedding(pretrained_embedding_size)
+# pretrained_embeds = torch.ones(62227, 50)
+pretrained_embeds = embed.extract_embedding(embedding_file, mapping.index2word)
+
+# original_embedding = nn.Embedding(62227, 50).cuda()
+# original_embedding.weight.data.copy_(pretrained_embeds[:])
 
 # Train
 ######################################################################
@@ -332,7 +359,9 @@ CDT2UD_Gold_Dataloader = DataLoader(CDT2UD_Gold_Dataset , batch_size=batch_size)
 criterion = nn.NLLLoss(ignore_index=100)
 
 # model
-lstm_model = MultiTaskBiLSTM(vocab_size=mapping.num_words, batch_size=batch_size, input_size=input_size, hidden_size=hidden_size, output_size_cdt=output_size_cdt, output_size_ud=output_size_ud)
+lstm_model = MultiTaskBiLSTM(vocab_size=mapping.num_words, batch_size=batch_size, pretrained_embedding_size=pretrained_embedding_size, \
+	random_embedding_size=random_embedding_size, hidden_size=hidden_size, output_size_cdt=output_size_cdt, output_size_ud=output_size_ud, \
+	pretrained_embeds=pretrained_embeds)
 lstm_model = lstm_model.cuda()
 
 # optimization
@@ -344,10 +373,14 @@ optimizer = optim.Adam(lstm_model.parameters(), lr=learning_rate)
 # best_dev_accuracy = 0
 # best_dev_accuracy_epoch = 0
 
-DataLoaders = [	(True, UD_Train_Dataset, UD_Train_Dataloader, UD_Dev_Dataloader, epochs, batch_size), 
+# DataLoaders = [	(True, UD_Train_Dataset, UD_Train_Dataloader, UD_Dev_Dataloader, epochs, batch_size), 
+# 				(False, CDT_Train_Dataset, CDT_Train_Dataloader, CDT_Dev_Dataloader, epochs, batch_size) ]
+
+DataLoaders = [	(True, CDT2UD_Train_Dataset, CDT2UD_Train_Dataloader, CDT2UD_Test_Dataloader, epochs, batch_size), 
 				(False, CDT_Train_Dataset, CDT_Train_Dataloader, CDT_Dev_Dataloader, epochs, batch_size) ]
 
-# DataLoaders[0], DataLoaders[1] = DataLoaders[1], DataLoaders[0]
+
+DataLoaders[0], DataLoaders[1] = DataLoaders[1], DataLoaders[0]
 
 # Pre_Train
 ######################################################################
@@ -357,10 +390,23 @@ DataLoaders = [	(True, UD_Train_Dataset, UD_Train_Dataloader, UD_Dev_Dataloader,
 # CDT 			3.25%(4.88%)					95.30%
 # CDT + UD		77.12%(84.03%)		88.92%                                                                                                                                                                                                                                                 
 
-# pre_train(DataLoaders)
 
-DataLoader_iters = [[True, UD_Train_Dataset, UD_Train_Dataloader, iter(UD_Train_Dataloader), UD_Dev_Dataloader, iter(UD_Dev_Dataloader), epochs, batch_size], 
+# Pre_Train
+######################################################################
+# result GPU04	cdt2ud 				UD 			CDT
+# UD 			67.96%(69.50%)		91.27%
+# UD + CDT 		81.66%(87.09%)					96.16%
+# CDT 			2.32%(6.49%)					96.32%
+# CDT + UD		88.09%(88.40%)		91.51%
+
+pre_train(DataLoaders)
+
+# DataLoader_iters = [[True, UD_Train_Dataset, UD_Train_Dataloader, iter(UD_Train_Dataloader), UD_Dev_Dataloader, iter(UD_Dev_Dataloader), epochs, batch_size], 
+# 					[False, CDT_Train_Dataset, CDT_Train_Dataloader, iter(CDT_Train_Dataloader), CDT_Dev_Dataloader, iter(CDT_Dev_Dataloader), epochs, batch_size]]
+
+DataLoader_iters = [[True, CDT2UD_Train_Dataset, CDT2UD_Train_Dataloader, iter(CDT2UD_Train_Dataloader), CDT2UD_Test_Dataloader, iter(CDT2UD_Test_Dataloader), epochs, batch_size], 
 					[False, CDT_Train_Dataset, CDT_Train_Dataloader, iter(CDT_Train_Dataloader), CDT_Dev_Dataloader, iter(CDT_Dev_Dataloader), epochs, batch_size]]
+
 
 # Joint_Train
 ######################################################################
@@ -370,8 +416,16 @@ DataLoader_iters = [[True, UD_Train_Dataset, UD_Train_Dataloader, iter(UD_Train_
 # 		 		87.11%(87.71%)			r=1
 #				87.14%(87.73%)			r=10
 
-r = 1
+# Joint_Train
+######################################################################
+# parameters GPU06
+# loss = 1 / (1 + r) * UDLoss + r / (1 + r) * CDTLoss
+# CDT - UD 		73.43%(85.49%)			r=0.01
+# 		 		69.62%(86.63%)			r=0.1
+#				87.18%(88.68%)			r=1
+#				88.00%(88.42%)			r=10
 
-joint_train(DataLoader_iters, r)
+# r = 100
 
+# joint_train(DataLoader_iters, r)
 

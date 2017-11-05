@@ -9,11 +9,12 @@ import random
 
 class MultiTaskBiLSTM(nn.Module):
 
-	def __init__(self, vocab_size, batch_size, input_size, hidden_size, output_size_cdt, output_size_ud, dropout_prob=0.5, bidirectional=True):
+	def __init__(self, vocab_size, batch_size, pretrained_embedding_size, random_embedding_size, hidden_size, output_size_cdt, output_size_ud, pretrained_embeds, dropout_prob=0.5, bidirectional=True):
 		super(MultiTaskBiLSTM, self).__init__()
 		self.vocab_size = vocab_size
 		self.batch_size = batch_size
-		self.input_size = input_size
+		self.pretrained_embedding_size = pretrained_embedding_size
+		self.random_embedding_size = random_embedding_size
 		self.hidden_size = hidden_size
 		self.output_size_cdt = output_size_cdt
 		self.output_size_ud = output_size_ud
@@ -21,18 +22,26 @@ class MultiTaskBiLSTM(nn.Module):
 		self.bidirectional = bidirectional
 		self.dropout_prob = dropout_prob
 
-		self.embeddings = nn.Embedding(self.vocab_size, self.input_size).cuda()
+		self.w1_embeddings = nn.Embedding(self.vocab_size, self.random_embedding_size).cuda()
+		self.w2_embeddings = [nn.Embedding(self.vocab_size, self.pretrained_embedding_size).cuda()]
+		self.w2_embeddings[0].weight.data.copy_(pretrained_embeds)
+		self.w2_embeddings[0].weight.requires_grad = False
+
 
 		self.initHidden = Variable(torch.zeros(2 if self.bidirectional else 1, self.batch_size, self.hidden_size).cuda())
 		self.initCell = Variable(torch.zeros(2 if self.bidirectional else 1, self.batch_size, self.hidden_size).cuda())
 
-		self.lstm = nn.LSTM(self.input_size, self.hidden_size, batch_first=True, bidirectional=self.bidirectional)
+		self.lstm = nn.LSTM(self.pretrained_embedding_size + self.random_embedding_size, self.hidden_size, batch_first=True, bidirectional=self.bidirectional)
 
 		self.h2o_cdt = nn.Linear((2 if self.bidirectional else 1) * self.hidden_size, self.output_size_cdt).cuda()
 		self.h2o_ud = nn.Linear((2 if self.bidirectional else 1) * self.hidden_size, self.output_size_ud).cuda()
 
 	def forward(self, inputs, UD=True):
-		embeds = self.embeddings(inputs)
+		w1_embeds = self.w1_embeddings(inputs)
+		w2_embeds = self.w2_embeddings[0](inputs)
+		embeds = torch.cat((w1_embeds, w2_embeds), dim=2).cuda()
+		# print (embeds.data.shape)
+		# print (w1_embeds.data[:1])
 
 		batch_size = inputs.size()[0]
 		if batch_size != self.batch_size:
